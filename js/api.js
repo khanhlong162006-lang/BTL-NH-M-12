@@ -1,121 +1,139 @@
-   <script>
-        const API_URL = "https://69f9a6dcc509a40d3aa2eff4.mockapi.io/api/v1/chuyenbay";
-        let flightsDataCache = []; // Mảng chứa dữ liệu thô tải từ server về
+/* MockAPI access and flight CRUD operations. */
+const API_URL = 'https://69f9a6dcc509a40d3aa2eff4.mockapi.io/api/v1/chuyenbay';
+function seedFlights() {
+    return [
+        {id:1,from:'HAN',to:'SGN',dep:'06:30',arr:'08:40',dur:'2h10m',flightNo:'SK212',cur:1190000,tgt:990000,type:'domestic',seatClass:'economy',note:'Bay buổi sáng sớm'},
+        {id:2,from:'SGN',to:'DAD',dep:'07:00',arr:'08:20',dur:'1h20m',flightNo:'SK108',cur:790000,tgt:750000,type:'domestic',seatClass:'economy',note:''},
+        {id:3,from:'HAN',to:'PQC',dep:'22:15',arr:'00:05',dur:'1h50m',flightNo:'SK362',cur:1350000,tgt:1200000,type:'domestic',seatClass:'economy',note:'Chuyến đêm'},
+        {id:4,from:'SGN',to:'CXR',dep:'09:00',arr:'10:05',dur:'1h05m',flightNo:'SK525',cur:680000,tgt:750000,type:'domestic',seatClass:'economy',note:''},
+        {id:5,from:'HAN',to:'DAD',dep:'23:40',arr:'01:10',dur:'1h30m',flightNo:'SK214',cur:890000,tgt:900000,type:'domestic',seatClass:'economy',note:'Chuyến đêm'},
+        {id:6,from:'SGN',to:'PQC',dep:'08:20',arr:'09:25',dur:'1h05m',flightNo:'SK341',cur:820000,tgt:850000,type:'domestic',seatClass:'business',note:''},
+        {id:7,from:'HAN',to:'BKK',dep:'10:00',arr:'13:30',dur:'3h30m',flightNo:'SK510',cur:2450000,tgt:2000000,type:'international',seatClass:'economy',note:'Quốc tế'},
+        {id:8,from:'SGN',to:'CXR',dep:'14:30',arr:'15:30',dur:'1h00m',flightNo:'SK612',cur:770000,tgt:790000,type:'domestic',seatClass:'economy',note:''},
+    ];
+}
 
-        // 1. Quản lý Đổi Tab Sidebar
-        const menuItems = document.querySelectorAll('.menu-item');
-        const tabContents = document.querySelectorAll('.tab-content');
+/* ═══════════════════════════════════
+   FLIGHT LIST – RENDER
+═══════════════════════════════════ */
+function normalizeFlight(raw) {
+    return {
+        id: raw.id ?? Date.now(),
+        from: (raw.from || raw.fromCity || '').toUpperCase(),
+        to: (raw.to || raw.toCity || '').toUpperCase(),
+        dep: raw.dep || raw.departureTime || '06:00',
+        arr: raw.arr || raw.arrivalTime || '08:00',
+        dur: raw.dur || raw.duration || calcDur(raw.dep || raw.departureTime || '06:00', raw.arr || raw.arrivalTime || '08:00'),
+        flightNo: raw.flightNo || raw.code || `SK${raw.id ?? Math.floor(Math.random() * 900 + 100)}`,
+        cur: Number(raw.cur ?? raw.currentPrice ?? raw.price ?? 0),
+        tgt: Number(raw.tgt ?? raw.targetPrice ?? raw.price ?? 0),
+        type: raw.type || 'domestic',
+        seatClass: raw.seatClass || raw.class || 'economy',
+        note: raw.note || ''
+    };
+}
 
-        menuItems.forEach(item => {
-            item.addEventListener('click', () => {
-                menuItems.forEach(i => i.classList.remove('active'));
-                tabContents.forEach(t => t.classList.remove('active'));
+async function requestApi(path = '', options = {}) {
+    const response = await fetch(`${API_URL}${path}`, {
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        ...options
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (response.status === 204) return null;
+    return response.json();
+}
 
-                item.classList.add('active');
-                const tabId = item.getAttribute('data-tab');
-                document.getElementById(tabId).classList.add('active');
-            });
+async function loadFlights() {
+    try {
+        const data = await requestApi();
+        flights = Array.isArray(data) && data.length ? data.map(normalizeFlight) : seedFlights();
+    } catch (error) {
+        console.warn('Không thể tải dữ liệu từ MockAPI, dùng dữ liệu mẫu:', error);
+        flights = seedFlights();
+    }
+    renderGrid();
+    updateSelectBtn();
+}
+
+function readFlightForm() {
+    const dep = document.getElementById('m-dep').value;
+    const arr = document.getElementById('m-arr').value;
+    return {
+        from: document.getElementById('m-from').value.trim().toUpperCase(),
+        to: document.getElementById('m-to').value.trim().toUpperCase(),
+        dep,
+        arr,
+        dur: document.getElementById('m-dur').value.trim() || calcDur(dep, arr),
+        flightNo: document.getElementById('m-flight-no').value.trim().toUpperCase(),
+        cur: Number(document.getElementById('m-cur').value),
+        tgt: Number(document.getElementById('m-tgt').value),
+        type: document.getElementById('m-type').value,
+        seatClass: document.getElementById('m-class').value,
+        note: document.getElementById('m-note').value.trim()
+    };
+}
+
+async function saveFlight() {
+    const payload = readFlightForm();
+    if (!payload.from || !payload.to || !payload.flightNo || !payload.cur || !payload.tgt) {
+        showToast('Vui lòng nhập đủ thông tin chặng bay!', 'error');
+        return;
+    }
+
+    const localFlight = normalizeFlight({ ...payload, id: editingId || Date.now() });
+    if (editingId) {
+        flights = flights.map(f => String(f.id) === String(editingId) ? localFlight : f);
+    } else {
+        flights.push(localFlight);
+    }
+
+    try {
+        const saved = await requestApi(editingId ? `/${editingId}` : '', {
+            method: editingId ? 'PUT' : 'POST',
+            body: JSON.stringify(payload)
         });
+        const normalized = normalizeFlight(saved || localFlight);
+        flights = editingId
+            ? flights.map(f => String(f.id) === String(editingId) ? normalized : f)
+            : flights.map(f => String(f.id) === String(localFlight.id) ? normalized : f);
+    } catch (error) {
+        console.warn('Không thể đồng bộ MockAPI, đã lưu tạm trên giao diện:', error);
+    }
 
-        // 2. Fetch dữ liệu bất đồng bộ từ Mock API thực tế của bạn
-        async function fetchFlights() {
-            const gridContainer = document.getElementById('flights-card-grid');
-            try {
-                const response = await fetch(API_URL);
-                if (!response.ok) throw new Error("Mạng không ổn định hoặc sai Endpoint dữ liệu.");
-                
-                flightsDataCache = await response.json();
-                renderFlights(flightsDataCache); // Hiển thị toàn bộ dữ liệu khi tải trang xong
-            } catch (error) {
-                console.error("Lỗi liên kết API:", error);
-                gridContainer.innerHTML = `
-                    <div class="status-message" style="color:var(--danger)">
-                        <i class="fa-solid fa-circle-exclamation"></i><br>
-                        Không thể truy xuất dữ liệu từ máy chủ API.<br>
-                        <small style="display:block; margin-top:5px;">Chi tiết: ${error.message}</small>
-                    </div>`;
-            }
-        }
+    closeFlightModal();
+    renderGrid();
+    updateSelectBtn();
+    showToast(editingId ? 'Đã cập nhật chặng bay!' : 'Đã thêm chặng bay!', 'success');
+}
 
-        // 3. Đổ dữ liệu động vào giao diện cấu trúc CSS Card của bạn
-        function renderFlights(flightsList) {
-            const gridContainer = document.getElementById('flights-card-grid');
-            
-            if (!flightsList || flightsList.length === 0) {
-                gridContainer.innerHTML = `
-                    <div class="status-message">
-                        <i class="fa-solid fa-plane-slash"></i><br>Không tìm thấy lịch bay thích hợp với tuyến đường này.
-                    </div>`;
-                return;
-            }
+function confirmDelete(id) {
+    const flight = flights.find(f => String(f.id) === String(id));
+    openConfirm('Xóa chặng bay', `Bạn có chắc muốn xóa chặng <strong>${flight ? `${flight.from} → ${flight.to}` : id}</strong>?`, () => deleteFlight(id));
+}
 
-            gridContainer.innerHTML = flightsList.map(flight => {
-                // Ánh xạ các key dữ liệu từ Mock API đề phòng trùng hoặc khác tên (fallback)
-                const id = flight.flightNo || flight.id || 'SL-' + Math.floor(Math.random() * 900 + 100);
-                const from = flight.fromCity || flight.from || 'Chưa rõ';
-                const to = flight.toCity || flight.to || 'Chưa rõ';
-                const dTime = flight.departureTime || '08:00';
-                const aTime = flight.arrivalTime || '10:15';
-                const duration = flight.duration || '2h 15m';
-                
-                // Chuẩn hóa định dạng tiền tệ Việt Nam Đồng (VND)
-                const priceFormatted = flight.price 
-                    ? Number(flight.price).toLocaleString('vi-VN') + " đ" 
-                    : "Hết chỗ";
+async function deleteFlight(id) {
+    flights = flights.filter(f => String(f.id) !== String(id));
+    selectedIds.delete(String(id));
+    try {
+        await requestApi(`/${id}`, { method: 'DELETE' });
+    } catch (error) {
+        console.warn('Không thể xóa trên MockAPI, đã xóa tạm trên giao diện:', error);
+    }
+    renderGrid();
+    updateSelectBtn();
+    showToast('Đã xóa chặng bay!', 'info');
+}
 
-                return `
-                    <div class="flight-item">
-                        <div class="fi-header">
-                            <div>
-                                <div class="fi-route">${from} ➔ ${to}</div>
-                                <div class="fi-flight-no">Mã hành trình: ${id}</div>
-                            </div>
-                            <div class="fi-icon-wrap"><i class="fa-solid fa-plane"></i></div>
-                        </div>
-                        <div class="flight-item-body">
-                            <div class="fi-time-row">
-                                <div class="fi-time-block">
-                                    <h2>${dTime}</h2>
-                                    <p>${from}</p>
-                                </div>
-                                <div class="fi-duration-block">
-                                    <span>${duration}</span>
-                                    <i class="fa-solid fa-ellipsis"></i>
-                                </div>
-                                <div class="fi-time-block">
-                                    <h2>${aTime}</h2>
-                                    <p>${to}</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="fi-footer">
-                            <div class="fi-price">${priceFormatted}</div>
-                            <button class="btn-gold" style="padding: 8px 16px; font-size:12px; border:none; border-radius:6px; font-weight:600; cursor:pointer;">Đặt Vé</button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
+function deleteSelected() {
+    if (!selectedIds.size) return;
+    openConfirm('Xóa các chặng đã chọn', `Xóa <strong>${selectedIds.size}</strong> chặng bay đã chọn?`, async () => {
+        const ids = [...selectedIds];
+        flights = flights.filter(f => !selectedIds.has(String(f.id)));
+        selectedIds.clear();
+        await Promise.allSettled(ids.map(id => requestApi(`/${id}`, { method: 'DELETE' })));
+        renderGrid();
+        updateSelectBtn();
+        showToast('Đã xóa các chặng đã chọn!', 'info');
+    });
+}
 
-        // 4. Lọc dữ liệu khách hàng chọn trên bộ lọc Frontend
-        document.getElementById('btn-search').addEventListener('click', () => {
-            const fromSelected = document.getElementById('from-city').value;
-            const toSelected = document.getElementById('to-city').value;
-
-            const filteredResult = flightsDataCache.filter(flight => {
-                const flightFrom = (flight.fromCity || flight.from || '').toLowerCase();
-                const flightTo = (flight.toCity || flight.to || '').toLowerCase();
-                
-                // So khớp chuỗi lọc (nếu chọn "Tất cả" thì bỏ qua điều kiện đó)
-                const matchFrom = !fromSelected || flightFrom.includes(fromSelected.toLowerCase());
-                const matchTo = !toSelected || flightTo.includes(toSelected.toLowerCase());
-                
-                return matchFrom && matchTo;
-            });
-
-            renderFlights(filteredResult);
-        });
-
-        // 5. Tự động chạy lệnh gọi API ngay khi cấu trúc DOM sẵn sàng
-        window.addEventListener('DOMContentLoaded', fetchFlights);
-    </script>
