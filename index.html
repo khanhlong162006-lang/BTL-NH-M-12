@@ -1766,25 +1766,6 @@ function showToast(msg,type='info') {
 
 const BASE_URL = "https://69f9a6dcc509a40d3aa2eff4.mockapi.io/api/v1/chuyenbay"; 
 
-// 1. Hàm Tải dữ liệu từ API
-async function loadFlights() {
-    try {
-        const res = await fetch(API_URL);
-        if(res.ok) {
-            flights = await res.json();
-        } else {
-            flights = seedFlights(); // Fallback nếu API lỗi
-        }
-        renderGrid();
-        updateFlStats();
-    } catch(e) {
-        console.error("Lỗi khi tải dữ liệu API:", e);
-        flights = seedFlights();
-renderGrid();
-        updateFlStats();
-    }
-}
-
 
 // Khởi chạy App
 loadFlights();
