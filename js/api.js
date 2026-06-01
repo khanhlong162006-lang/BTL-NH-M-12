@@ -1,7 +1,5 @@
 const BASE_URL = "https://69f9a6dcc509a40d3aa2eff4.mockapi.io/api/v1/Chuyenbay"; 
 
-const API_URL = 'https://6a1635921b90031f81b0cb60.mockapi.io/:endpoint'; 
-
 // 1. Hàm Tải dữ liệu từ API
 async function loadFlights() {
     try {
