@@ -1,4 +1,4 @@
-const BASE_URL = "https://69f9a6dcc509a40d3aa2eff4.mockapi.io/api/v1"; 
+const BASE_URL = "https://69f9a6dcc509a40d3aa2eff4.mockapi.io/api/v1/Chuyenbay"; 
 
 const api = {
     // === ENDPOINT 1: CHUYẾN BAY CHÍNH (/Chuyenbay) ===
