@@ -1,124 +1,121 @@
-const BASE_URL = "https://69f9a6dcc509a40d3aa2eff4.mockapi.io/api/v1/Chuyenbay"; 
+   <script>
+        const API_URL = "https://69f9a6dcc509a40d3aa2eff4.mockapi.io/api/v1/chuyenbay";
+        let flightsDataCache = []; // Mảng chứa dữ liệu thô tải từ server về
 
-// 1. Hàm Tải dữ liệu từ API
-async function loadFlights() {
-    try {
-        const res = await fetch(API_URL);
-        if(res.ok) {
-            flights = await res.json();
-        } else {
-            flights = seedFlights(); // Fallback nếu API lỗi
-        }
-        renderGrid();
-        updateFlStats();
-    } catch(e) {
-        console.error("Lỗi khi tải dữ liệu API:", e);
-        flights = seedFlights();
-renderGrid();
-        updateFlStats();
-    }
-}
+        // 1. Quản lý Đổi Tab Sidebar
+        const menuItems = document.querySelectorAll('.menu-item');
+        const tabContents = document.querySelectorAll('.tab-content');
 
-// 2. Hàm Ghi đè Cập nhật/Thêm mới qua API
-async function saveFlight() {
-    const from = document.getElementById('m-from').value.trim().toUpperCase();
-    const to   = document.getElementById('m-to').value.trim().toUpperCase();
-    const dep  = document.getElementById('m-dep').value;
-    const arr  = document.getElementById('m-arr').value;
-    const dur  = document.getElementById('m-dur').value.trim() || calcDur(dep,arr);
-    const flightNo = document.getElementById('m-flight-no').value.trim() || `SK${Math.floor(Math.random()*900)+100}`;
-    const cur  = parseInt(document.getElementById('m-cur').value)||0;
-    const tgt  = parseInt(document.getElementById('m-tgt').value)||0;
-    const type = document.getElementById('m-type').value;
-    const seatClass = document.getElementById('m-class').value;
-    const note = document.getElementById('m-note').value.trim();
-    
-    if (!from||!to) { showToast('Vui lòng nhập mã sân bay đi và đến!','error'); return; }
-    if (!cur)       { showToast('Vui lòng nhập giá hiện tại!','error'); return; }
-    if (!tgt)       { showToast('Vui lòng nhập giá mục tiêu!','error'); return; }
-    
-    const flightData = {from, to, dep, arr, dur, flightNo, cur, tgt, type, seatClass, note};
+        menuItems.forEach(item => {
+            item.addEventListener('click', () => {
+                menuItems.forEach(i => i.classList.remove('active'));
+                tabContents.forEach(t => t.classList.remove('active'));
 
-    try {
-        if (editingId) {
-            // PUT: Cập nhật
-            await fetch(`${API_URL}/${editingId}`, {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(flightData)
+                item.classList.add('active');
+                const tabId = item.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
             });
-            showToast('Đã cập nhật chặng bay trên API!','success');
-        } else {
-            // POST: Thêm mới
-            await fetch(API_URL, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(flightData)
+        });
+
+        // 2. Fetch dữ liệu bất đồng bộ từ Mock API thực tế của bạn
+        async function fetchFlights() {
+            const gridContainer = document.getElementById('flights-card-grid');
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error("Mạng không ổn định hoặc sai Endpoint dữ liệu.");
+                
+                flightsDataCache = await response.json();
+                renderFlights(flightsDataCache); // Hiển thị toàn bộ dữ liệu khi tải trang xong
+            } catch (error) {
+                console.error("Lỗi liên kết API:", error);
+                gridContainer.innerHTML = `
+                    <div class="status-message" style="color:var(--danger)">
+                        <i class="fa-solid fa-circle-exclamation"></i><br>
+                        Không thể truy xuất dữ liệu từ máy chủ API.<br>
+                        <small style="display:block; margin-top:5px;">Chi tiết: ${error.message}</small>
+                    </div>`;
+            }
+        }
+
+        // 3. Đổ dữ liệu động vào giao diện cấu trúc CSS Card của bạn
+        function renderFlights(flightsList) {
+            const gridContainer = document.getElementById('flights-card-grid');
+            
+            if (!flightsList || flightsList.length === 0) {
+                gridContainer.innerHTML = `
+                    <div class="status-message">
+                        <i class="fa-solid fa-plane-slash"></i><br>Không tìm thấy lịch bay thích hợp với tuyến đường này.
+                    </div>`;
+                return;
+            }
+
+            gridContainer.innerHTML = flightsList.map(flight => {
+                // Ánh xạ các key dữ liệu từ Mock API đề phòng trùng hoặc khác tên (fallback)
+                const id = flight.flightNo || flight.id || 'SL-' + Math.floor(Math.random() * 900 + 100);
+                const from = flight.fromCity || flight.from || 'Chưa rõ';
+                const to = flight.toCity || flight.to || 'Chưa rõ';
+                const dTime = flight.departureTime || '08:00';
+                const aTime = flight.arrivalTime || '10:15';
+                const duration = flight.duration || '2h 15m';
+                
+                // Chuẩn hóa định dạng tiền tệ Việt Nam Đồng (VND)
+                const priceFormatted = flight.price 
+                    ? Number(flight.price).toLocaleString('vi-VN') + " đ" 
+                    : "Hết chỗ";
+
+                return `
+                    <div class="flight-item">
+                        <div class="fi-header">
+                            <div>
+                                <div class="fi-route">${from} ➔ ${to}</div>
+                                <div class="fi-flight-no">Mã hành trình: ${id}</div>
+                            </div>
+                            <div class="fi-icon-wrap"><i class="fa-solid fa-plane"></i></div>
+                        </div>
+                        <div class="flight-item-body">
+                            <div class="fi-time-row">
+                                <div class="fi-time-block">
+                                    <h2>${dTime}</h2>
+                                    <p>${from}</p>
+                                </div>
+                                <div class="fi-duration-block">
+                                    <span>${duration}</span>
+                                    <i class="fa-solid fa-ellipsis"></i>
+                                </div>
+                                <div class="fi-time-block">
+                                    <h2>${aTime}</h2>
+                                    <p>${to}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="fi-footer">
+                            <div class="fi-price">${priceFormatted}</div>
+                            <button class="btn-gold" style="padding: 8px 16px; font-size:12px; border:none; border-radius:6px; font-weight:600; cursor:pointer;">Đặt Vé</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 4. Lọc dữ liệu khách hàng chọn trên bộ lọc Frontend
+        document.getElementById('btn-search').addEventListener('click', () => {
+            const fromSelected = document.getElementById('from-city').value;
+            const toSelected = document.getElementById('to-city').value;
+
+            const filteredResult = flightsDataCache.filter(flight => {
+                const flightFrom = (flight.fromCity || flight.from || '').toLowerCase();
+                const flightTo = (flight.toCity || flight.to || '').toLowerCase();
+                
+                // So khớp chuỗi lọc (nếu chọn "Tất cả" thì bỏ qua điều kiện đó)
+                const matchFrom = !fromSelected || flightFrom.includes(fromSelected.toLowerCase());
+                const matchTo = !toSelected || flightTo.includes(toSelected.toLowerCase());
+                
+                return matchFrom && matchTo;
             });
-            showToast('Đã thêm chặng bay mới lên API!','success');
-        }
-        closeFlightModal();
-        loadFlights(); // Tải lại dữ liệu từ API
-    } catch (error) {
-        showToast('Lỗi kết nối đến API!','error');
-        console.error(error);
-    }
-}
 
+            renderFlights(filteredResult);
+        });
 
-function confirmDelete(id) {
-    const f = flights.find(x => String(x.id) === String(id));
-    openConfirm('Xóa chặng bay',`Xóa chặng <strong>${f.from} → ${f.to}</strong> (${f.flightNo})?`, async () => {
-        try {
-            await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
-            selectedIds.delete(String(id));
-            updateSelectBtn();
-            loadFlights(); // Tải lại sau khi xóa
-            showToast('Đã xóa chặng bay khỏi API!','info');
-        } catch (error) {
-            showToast('Lỗi khi xóa trên API!','error');
-        }
-    });
-}
-
-
-function deleteSelected() {
-    if(!selectedIds.size) return;
-    const cnt = selectedIds.size;
-openConfirm('Xóa nhiều chặng',`Xóa <strong>${cnt}</strong> chặng đã chọn?`, async () => {
-        try {
-           
-            const deletePromises = Array.from(selectedIds).map(id => fetch(`${API_URL}/${id}`, { method: 'DELETE' }));
-            await Promise.all(deletePromises);
-            
-            selectedIds.clear();
-            updateSelectBtn();
-            loadFlights();
-            showToast(`Đã xóa ${cnt} chặng!`,'info');
-        } catch (error) {
-            showToast('Lỗi khi xóa nhiều trên API!','error');
-        }
-    });
-}
-
-
-function clearAllFlights() {
-    if(!flights.length){ showToast('Chưa có chặng nào!','warning'); return; }
-    openConfirm('Xóa tất cả chặng',`Xóa toàn bộ <strong>${flights.length}</strong> chặng bay?`, async () => {
-        try {
-            
-            const deletePromises = flights.map(f => fetch(`${API_URL}/${f.id}`, { method: 'DELETE' }));
-            await Promise.all(deletePromises);
-            
-            selectedIds.clear();
-            updateSelectBtn();
-            loadFlights();
-            showToast('Đã xóa tất cả chặng!','info');
-        } catch (error) {
-            showToast('Lỗi khi xóa toàn bộ trên API!','error');
-        }
-    });
-}
-
-// Khởi chạy App
-loadFlights();
+        // 5. Tự động chạy lệnh gọi API ngay khi cấu trúc DOM sẵn sàng
+        window.addEventListener('DOMContentLoaded', fetchFlights);
+    </script>
