@@ -1,19 +1,1 @@
-/* Hiệu ứng hover phóng to nhẹ và đổ bóng nâng cao cho Card */
-.card-flight-hover {
-    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s ease;
-    cursor: pointer;
-}
 
-.card-flight-hover:hover {
-    transform: translateY(-6px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15) !important;
-}
-
-/* Hiệu ứng mượt mà cho ảnh */
-.card-flight-hover img {
-    transition: filter 0.3s ease;
-}
-
-.card-flight-hover:hover img {
-    filter: brightness(0.95);
-}
